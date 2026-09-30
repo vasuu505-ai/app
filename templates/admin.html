@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FreeNumber Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+            dark: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    @keyframes pulse-subtle { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .pulse-live { animation: pulse-subtle 2s infinite ease-in-out; }
+  </style>
+</head>
+<body class="bg-dark-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+  <!-- ================= AUTH LOCK SCREEN ================= -->
+  <div id="authScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-dark-950/95 backdrop-blur-md px-4">
+    <div class="max-w-md w-full bg-dark-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+      <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto mb-6">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <h2 class="text-2xl font-bold text-center text-white">Admin Security Access</h2>
+      <p class="text-slate-400 text-sm text-center mt-2 mb-6">Enter your Admin Passcode to access the management portal</p>
+      
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Admin Passcode</label>
+          <div class="relative">
+            <input type="password" id="adminPassInput" placeholder="Enter admin code..." required
+              class="w-full bg-dark-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+            <button type="button" onclick="togglePassVisibility()" class="absolute right-3 top-3 text-slate-400 hover:text-white">
+              <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="loginError" class="hidden text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5"></div>
+        <button type="submit" id="loginBtn"
+          class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition duration-200">
+          Unlock Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= TOP NAVIGATION ================= -->
+  <header class="border-b border-slate-800 bg-dark-900/60 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <div>
+          <span class="font-bold text-lg text-white tracking-tight">FreeNumber <span class="text-indigo-400">Admin</span></span>
+          <span class="text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-1.5 py-0.5 rounded ml-2 font-mono">v2.0</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="hidden md:flex space-x-1">
+        <button onclick="switchTab('numbers')" id="tabBtn-numbers" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition bg-slate-800 text-white">
+          Numbers Management
+        </button>
+        <button onclick="switchTab('live')" id="tabBtn-live" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition text-slate-400 hover:text-white flex items-center space-x-2">
+          <span>Live OTP Stream</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-live"></span>
+        </button>
+        <button onclick="switchTab('notify')" id="tabBtn-notify" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition text-slate-400 hover:text-white">
+          Push Notifications
+        </button>
+        <button onclick="switchTab('api')" id="tabBtn-api" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition text-slate-400 hover:text-white">
+          API Explorer
+        </button>
+      </nav>
+
+      <div class="flex items-center space-x-3">
+        <div id="liveStreamBadge" class="hidden items-center space-x-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full sm:flex">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-live"></span>
+          <span>SSE Connected</span>
+        </div>
+        <button onclick="logoutAdmin()" class="text-xs bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 border border-slate-700 hover:border-rose-500/30 px-3 py-1.5 rounded-lg transition">
+          Logout
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Tab Switcher -->
+  <div class="md:hidden flex border-b border-slate-800 bg-dark-900 overflow-x-auto px-4 py-2 space-x-2">
+    <button onclick="switchTab('numbers')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-white whitespace-nowrap">Numbers</button>
+    <button onclick="switchTab('live')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 whitespace-nowrap">Live Stream</button>
+    <button onclick="switchTab('notify')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 whitespace-nowrap">Push Alerts</button>
+    <button onclick="switchTab('api')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 whitespace-nowrap">APIs</button>
+  </div>
+
+  <!-- ================= MAIN CONTENT ================= -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+    
+    <!-- STATS OVERVIEW CARDS -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Numbers</div>
+        <div class="text-2xl sm:text-3xl font-bold text-white mt-2" id="statTotalNumbers">0</div>
+        <div class="text-xs text-indigo-400 mt-1 flex items-center space-x-1">
+          <span id="statActiveNumbers">0</span> active
+        </div>
+      </div>
+
+      <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Countries</div>
+        <div class="text-2xl sm:text-3xl font-bold text-white mt-2" id="statTotalCountries">0</div>
+        <div class="text-xs text-slate-500 mt-1">Multi-region coverage</div>
+      </div>
+
+      <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Received OTPs</div>
+        <div class="text-2xl sm:text-3xl font-bold text-emerald-400 mt-2" id="statTotalOtps">0</div>
+        <div class="text-xs text-emerald-500/80 mt-1">Live in storage</div>
+      </div>
+
+      <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Supported Apps</div>
+        <div class="text-2xl sm:text-3xl font-bold text-indigo-400 mt-2" id="statTotalApps">19</div>
+        <div class="text-xs text-slate-500 mt-1">WhatsApp, Telegram, etc.</div>
+      </div>
+    </div>
+
+    <!-- ================= TAB 1: NUMBERS MANAGEMENT ================= -->
+    <section id="tab-numbers" class="tab-content block space-y-6">
+      <!-- Toolbar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-dark-900 border border-slate-800 rounded-2xl p-4">
+        <div class="flex flex-1 items-center space-x-3">
+          <div class="relative flex-1 max-w-sm">
+            <svg class="w-4 h-4 text-slate-500 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input type="text" id="searchInput" oninput="renderNumbersTable()" placeholder="Search phone or country..."
+              class="w-full bg-dark-950 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+          </div>
+          <select id="countryFilter" onchange="renderNumbersTable()" class="bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+            <option value="all">All Countries</option>
+          </select>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button onclick="openAddModal()" class="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-md shadow-indigo-600/20 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            <span>Add Number</span>
+          </button>
+          <button onclick="confirmClearAllNumbers()" class="text-xs bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 border border-slate-700 px-3 py-2 rounded-xl transition">
+            Clear All
+          </button>
+        </div>
+      </div>
+
+      <!-- Numbers Table Container -->
+      <div class="bg-dark-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-dark-950 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-400 font-semibold">
+              <tr>
+                <th class="py-3.5 px-4">Country & Code</th>
+                <th class="py-3.5 px-4">Phone Number</th>
+                <th class="py-3.5 px-4">Status</th>
+                <th class="py-3.5 px-4">Supported Apps</th>
+                <th class="py-3.5 px-4">Blocked Apps</th>
+                <th class="py-3.5 px-4 text-center">SMS Count</th>
+                <th class="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="numbersTableBody" class="divide-y divide-slate-800/60">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+        <div id="noNumbersMessage" class="hidden py-12 text-center text-slate-500">
+          No numbers match your filters.
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 2: LIVE OTP STREAM ================= -->
+    <section id="tab-live" class="tab-content hidden space-y-4">
+      <div class="flex items-center justify-between bg-dark-900 border border-slate-800 rounded-2xl p-4">
+        <div class="flex items-center space-x-3">
+          <div class="w-3 h-3 rounded-full bg-emerald-400 pulse-live"></div>
+          <div>
+            <h3 class="text-white font-semibold">Real-Time Live OTP Stream</h3>
+            <p class="text-xs text-slate-400">Incoming messages from all scraping panels stream here instantly via SSE</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="clearLiveFeed()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition">
+            Clear Feed
+          </button>
+        </div>
+      </div>
+
+      <!-- Feed Container -->
+      <div id="liveOtpFeed" class="space-y-3 max-h-[680px] overflow-y-auto pr-1">
+        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500">
+          Waiting for live incoming OTP messages... Keep this tab open.
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 3: PUSH NOTIFICATIONS ================= -->
+    <section id="tab-notify" class="tab-content hidden max-w-2xl mx-auto space-y-6">
+      <div class="bg-dark-900 border border-slate-800 rounded-2xl p-6 sm:p-8">
+        <div class="flex items-center space-x-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-white">Broadcast Push Notification</h3>
+            <p class="text-xs text-slate-400">Instantly notify user app devices via SSE & Firebase Cloud Messaging (FCM)</p>
+          </div>
+        </div>
+
+        <form id="notifyForm" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Target Phone Number</label>
+            <input type="text" id="notifyTargetNumber" placeholder="Leave empty for ALL users, or enter e.g. 79775594420"
+              class="w-full bg-dark-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+            <p class="text-[11px] text-slate-500 mt-1">Leave empty to broadcast to everyone tracking any number.</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Service / App Badge</label>
+              <select id="notifyAppId" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                <option value="whatsapp">WhatsApp</option>
+                <option value="telegram">Telegram</option>
+                <option value="google">Google</option>
+                <option value="uber">Uber</option>
+                <option value="facebook">Facebook</option>
+                <option value="instagram">Instagram</option>
+                <option value="discord">Discord</option>
+                <option value="general">General / Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Notification Title</label>
+              <input type="text" id="notifyTitle" placeholder="e.g. WhatsApp Code Ready" required
+                class="w-full bg-dark-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Notification Message / OTP</label>
+            <textarea id="notifyBody" rows="3" placeholder="e.g. Your verification code is 484-073" required
+              class="w-full bg-dark-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <div id="notifyStatus" class="hidden text-xs rounded-xl p-3"></div>
+
+          <button type="submit" id="sendNotifyBtn"
+            class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
+            Send Real-Time Notification Now
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ================= TAB 4: API EXPLORER ================= -->
+    <section id="tab-api" class="tab-content hidden space-y-6">
+      <div class="bg-dark-900 border border-slate-800 rounded-2xl p-6">
+        <h3 class="text-lg font-bold text-white mb-2">Production-Ready Koyeb Endpoints</h3>
+        <p class="text-sm text-slate-400 mb-6">Integrate these live endpoints directly into your mobile app or external frontend.</p>
+
+        <div class="space-y-4 font-mono text-xs">
+          <!-- Endpoint 1 -->
+          <div class="bg-dark-950 border border-slate-800 rounded-xl p-4">
+            <div class="flex items-center space-x-2 text-emerald-400 font-bold mb-1">
+              <span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
+              <span class="text-white">/api/numbers/{number}/messages</span>
+            </div>
+            <p class="text-slate-400 font-sans mt-1">Returns all OTP messages for a specific number with clean_otp, sender, app_id, etc.</p>
+          </div>
+
+          <!-- Endpoint 2 -->
+          <div class="bg-dark-950 border border-slate-800 rounded-xl p-4">
+            <div class="flex items-center space-x-2 text-emerald-400 font-bold mb-1">
+              <span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
+              <span class="text-white">/api/numbers</span>
+            </div>
+            <p class="text-slate-400 font-sans mt-1">Returns all numbers with supported_apps array, blocked_apps, country, flag, status, and received_sms_count.</p>
+          </div>
+
+          <!-- Endpoint 3 -->
+          <div class="bg-dark-950 border border-slate-800 rounded-xl p-4">
+            <div class="flex items-center space-x-2 text-emerald-400 font-bold mb-1">
+              <span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
+              <span class="text-white">/api/apps</span>
+            </div>
+            <p class="text-slate-400 font-sans mt-1">Returns catalog of popular apps with active country counts and availability status.</p>
+          </div>
+
+          <!-- Endpoint 4 -->
+          <div class="bg-dark-950 border border-slate-800 rounded-xl p-4">
+            <div class="flex items-center space-x-2 text-emerald-400 font-bold mb-1">
+              <span class="bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">GET</span>
+              <span class="text-white">/api/otps/stream</span>
+            </div>
+            <p class="text-slate-400 font-sans mt-1">Server-Sent Events (SSE) live stream of all incoming OTP messages in real-time.</p>
+          </div>
+
+          <!-- Endpoint 5 -->
+          <div class="bg-dark-950 border border-slate-800 rounded-xl p-4">
+            <div class="flex items-center space-x-2 text-indigo-400 font-bold mb-1">
+              <span class="bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">POST</span>
+              <span class="text-white">/api/notifications/subscribe</span>
+            </div>
+            <p class="text-slate-400 font-sans mt-1">Registers FCM device token for background phone push notifications on a specific number.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================= ADD / EDIT NUMBER MODAL ================= -->
+  <div id="numberModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-dark-950/80 backdrop-blur-sm px-4">
+    <div class="max-w-lg w-full bg-dark-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <h3 id="modalTitle" class="text-lg font-bold text-white">Add New Number(s)</h3>
+        <button onclick="closeNumberModal()" class="text-slate-400 hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <form id="numberForm" class="space-y-4">
+        <input type="hidden" id="editNumberId">
+
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Country</label>
+            <input type="text" id="modalCountry" placeholder="e.g. Russia" required
+              class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Dial Code</label>
+            <input type="text" id="modalCountryCode" placeholder="+7" required
+              class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Flag Emoji</label>
+            <input type="text" id="modalFlag" placeholder="🇷🇺" required
+              class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white text-center text-lg focus:outline-none focus:border-indigo-500">
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Status</label>
+            <select id="modalStatus" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="addNumbersFieldGroup">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Phone Number(s)</label>
+          <textarea id="modalNumbersText" rows="3" placeholder="Enter one or multiple numbers (one per line or comma-separated)"
+            class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+        </div>
+
+        <div id="editNumberFieldGroup" class="hidden">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Phone Number</label>
+          <input type="text" id="modalSingleNumber"
+            class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <!-- Supported Apps Checkbox Selector -->
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Supported Apps</label>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-dark-950 border border-slate-800 rounded-xl p-3 max-h-48 overflow-y-auto">
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="whatsapp" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>WhatsApp</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="telegram" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Telegram</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="google" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Google</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="uber" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Uber</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="facebook" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Facebook</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="instagram" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Instagram</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="discord" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Discord</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="twitter" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Twitter / X</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="tiktok" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>TikTok</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="amazon" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Amazon</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="netflix" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Netflix</span>
+            </label>
+            <label class="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" name="supportedApp" value="apple" checked class="rounded border-slate-700 text-indigo-600 focus:ring-0">
+              <span>Apple</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Blocked Apps (comma separated)</label>
+          <input type="text" id="modalBlockedApps" placeholder="e.g. paypal, binance"
+            class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div id="modalError" class="hidden text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5"></div>
+
+        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+          <button type="button" onclick="closeNumberModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition">
+            Cancel
+          </button>
+          <button type="submit" id="saveNumberBtn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold shadow-md shadow-indigo-600/30 transition">
+            Save Numbers
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+  <!-- ================= JAVASCRIPT LOGIC ================= -->
+  <script>
+    let adminToken = localStorage.getItem('admin_passcode') || '';
+    let allNumbers = [];
+    let sseSource = null;
+
+    // --- AUTHENTICATION ---
+    async function checkAuthOnLoad() {
+      if (adminToken) {
+        const verified = await verifyToken(adminToken);
+        if (verified) {
+          document.getElementById('authScreen').classList.add('hidden');
+          initDashboard();
+          return;
+        }
+      }
+      document.getElementById('authScreen').classList.remove('hidden');
+    }
+
+    async function verifyToken(pass) {
+      try {
+        const res = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': pass },
+          body: JSON.stringify({ password: pass })
+        });
+        return res.ok;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pass = document.getElementById('adminPassInput').value.trim();
+      const loginBtn = document.getElementById('loginBtn');
+      const errorDiv = document.getElementById('loginError');
+      
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Verifying...';
+      errorDiv.classList.add('hidden');
+
+      const ok = await verifyToken(pass);
+      if (ok) {
+        adminToken = pass;
+        localStorage.setItem('admin_passcode', pass);
+        document.getElementById('authScreen').classList.add('hidden');
+        showToast('Authenticated successfully', 'success');
+        initDashboard();
+      } else {
+        errorDiv.textContent = 'Incorrect Admin Passcode. Please try again.';
+        errorDiv.classList.remove('hidden');
+      }
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Unlock Dashboard';
+    });
+
+    function logoutAdmin() {
+      localStorage.removeItem('admin_passcode');
+      adminToken = '';
+      if (sseSource) sseSource.close();
+      window.location.reload();
+    }
+
+    function togglePassVisibility() {
+      const input = document.getElementById('adminPassInput');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function getAuthHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminToken
+      };
+    }
+
+    // --- TAB SWITCHING ---
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-800', 'text-white');
+        btn.classList.add('text-slate-400');
+      });
+
+      const activeContent = document.getElementById(`tab-${tabId}`);
+      if (activeContent) activeContent.classList.remove('hidden');
+
+      const activeBtn = document.getElementById(`tabBtn-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-slate-800', 'text-white');
+        activeBtn.classList.remove('text-slate-400');
+      }
+    }
+
+    // --- INITIALIZATION ---
+    async function initDashboard() {
+      await loadNumbersData();
+      await loadStats();
+      initSSE();
+    }
+
+    // --- NUMBERS MANAGEMENT ---
+    async function loadNumbersData() {
+      try {
+        const res = await fetch('/api/numbers');
+        const data = await res.json();
+        allNumbers = data.numbers || [];
+        populateCountryFilter();
+        renderNumbersTable();
+      } catch (e) {
+        showToast('Failed to load numbers', 'error');
+      }
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/health');
+        const data = await res.json();
+        document.getElementById('statTotalNumbers').textContent = allNumbers.length;
+        document.getElementById('statTotalOtps').textContent = data.otps || 0;
+        
+        const activeCount = allNumbers.filter(n => n.status === 'active').length;
+        document.getElementById('statActiveNumbers').textContent = activeCount;
+
+        const uniqueCountries = new Set(allNumbers.map(n => n.country)).size;
+        document.getElementById('statTotalCountries').textContent = uniqueCountries;
+      } catch (e) {}
+    }
+
+    function populateCountryFilter() {
+      const select = document.getElementById('countryFilter');
+      const countries = [...new Set(allNumbers.map(n => n.country))].filter(Boolean);
+      select.innerHTML = '<option value="all">All Countries</option>';
+      countries.forEach(c => {
+        select.innerHTML += `<option value="${c}">${c}</option>`;
+      });
+    }
+
+    function renderNumbersTable() {
+      const tbody = document.getElementById('numbersTableBody');
+      const search = (document.getElementById('searchInput').value || '').toLowerCase();
+      const countryFilter = document.getElementById('countryFilter').value;
+      const noMsg = document.getElementById('noNumbersMessage');
+
+      const filtered = allNumbers.filter(n => {
+        const matchSearch = (n.number || '').toLowerCase().includes(search) || 
+                            (n.country || '').toLowerCase().includes(search) ||
+                            (n.countryCode || '').toLowerCase().includes(search);
+        const matchCountry = countryFilter === 'all' || n.country === countryFilter;
+        return matchSearch && matchCountry;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        noMsg.classList.remove('hidden');
+        return;
+      }
+
+      noMsg.classList.add('hidden');
+      tbody.innerHTML = filtered.map(item => {
+        const apps = (item.supported_apps || []).map(app => 
+          `<span class="inline-block px-2 py-0.5 text-[11px] font-medium rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 mr-1 mb-1">${app}</span>`
+        ).join('') || '<span class="text-xs text-slate-500">None</span>';
+
+        const blocked = (item.blocked_apps || []).map(b => 
+          `<span class="inline-block px-2 py-0.5 text-[11px] font-medium rounded-md bg-rose-500/10 text-rose-300 border border-rose-500/20 mr-1 mb-1">${b}</span>`
+        ).join('') || '<span class="text-xs text-slate-500">-</span>';
+
+        const statusBadge = item.status === 'active' 
+          ? `<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>`
+          : `<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">Inactive</span>`;
+
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3.5 px-4 font-medium flex items-center space-x-2">
+              <span class="text-lg">${item.flag || '🌍'}</span>
+              <span>${item.country || 'Unknown'}</span>
+              <span class="text-xs text-slate-500 font-mono">(${item.countryCode || ''})</span>
+            </td>
+            <td class="py-3.5 px-4 font-mono font-medium text-white">${item.number}</td>
+            <td class="py-3.5 px-4">${statusBadge}</td>
+            <td class="py-3.5 px-4 max-w-xs">${apps}</td>
+            <td class="py-3.5 px-4 max-w-xs">${blocked}</td>
+            <td class="py-3.5 px-4 text-center font-mono font-semibold text-slate-300">${item.received_sms_count || 0}</td>
+            <td class="py-3.5 px-4 text-right space-x-2">
+              <button onclick="editNumber('${item.id}')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg transition">Edit</button>
+              <button onclick="deleteNumber('${item.id}')" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-2.5 py-1.5 rounded-lg transition">Delete</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // --- MODAL: ADD / EDIT ---
+    function openAddModal() {
+      document.getElementById('modalTitle').textContent = 'Add New Number(s)';
+      document.getElementById('editNumberId').value = '';
+      document.getElementById('modalCountry').value = 'Russia';
+      document.getElementById('modalCountryCode').value = '+7';
+      document.getElementById('modalFlag').value = '🇷🇺';
+      document.getElementById('modalStatus').value = 'active';
+      document.getElementById('modalNumbersText').value = '';
+      document.getElementById('modalBlockedApps').value = '';
+      
+      document.getElementById('addNumbersFieldGroup').classList.remove('hidden');
+      document.getElementById('editNumberFieldGroup').classList.add('hidden');
+      document.getElementById('modalError').classList.add('hidden');
+      document.getElementById('numberModal').classList.remove('hidden');
+      document.getElementById('numberModal').classList.add('flex');
+    }
+
+    function editNumber(id) {
+      const item = allNumbers.find(n => n.id === id);
+      if (!item) return;
+
+      document.getElementById('modalTitle').textContent = 'Edit Number Details';
+      document.getElementById('editNumberId').value = item.id;
+      document.getElementById('modalCountry').value = item.country || '';
+      document.getElementById('modalCountryCode').value = item.countryCode || '';
+      document.getElementById('modalFlag').value = item.flag || '🌍';
+      document.getElementById('modalStatus').value = item.status || 'active';
+      document.getElementById('modalSingleNumber').value = item.number || '';
+      document.getElementById('modalBlockedApps').value = (item.blocked_apps || []).join(', ');
+
+      // Checkboxes
+      const supported = item.supported_apps || [];
+      document.querySelectorAll("input[name='supportedApp']").forEach(cb => {
+        cb.checked = supported.includes(cb.value);
+      });
+
+      document.getElementById('addNumbersFieldGroup').classList.add('hidden');
+      document.getElementById('editNumberFieldGroup').classList.remove('hidden');
+      document.getElementById('modalError').classList.add('hidden');
+      document.getElementById('numberModal').classList.remove('hidden');
+      document.getElementById('numberModal').classList.add('flex');
+    }
+
+    function closeNumberModal() {
+      document.getElementById('numberModal').classList.add('hidden');
+      document.getElementById('numberModal').classList.remove('flex');
+    }
+
+    document.getElementById('numberForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('editNumberId').value;
+      const country = document.getElementById('modalCountry').value.trim();
+      const countryCode = document.getElementById('modalCountryCode').value.trim();
+      const flag = document.getElementById('modalFlag').value.trim();
+      const status = document.getElementById('modalStatus').value;
+      const blockedApps = document.getElementById('modalBlockedApps').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      
+      const supportedApps = [];
+      document.querySelectorAll("input[name='supportedApp']:checked").forEach(cb => supportedApps.push(cb.value));
+
+      const saveBtn = document.getElementById('saveNumberBtn');
+      const errDiv = document.getElementById('modalError');
+      errDiv.classList.add('hidden');
+      saveBtn.disabled = true;
+
+      try {
+        if (id) {
+          // Update existing
+          const singleNumber = document.getElementById('modalSingleNumber').value.trim();
+          const res = await fetch(`/api/admin/numbers/${id}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              number: singleNumber,
+              country,
+              countryCode,
+              flag,
+              status,
+              supported_apps: supportedApps,
+              blocked_apps: blockedApps
+            })
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.message || 'Update failed');
+          showToast('Number updated successfully', 'success');
+        } else {
+          // Add new
+          const rawText = document.getElementById('modalNumbersText').value;
+          const numbersList = rawText.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+          if (numbersList.length === 0) throw new Error('Please enter at least one phone number');
+
+          const res = await fetch('/api/admin/numbers', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              country,
+              countryCode,
+              flag,
+              numbers: numbersList,
+              status,
+              supported_apps: supportedApps,
+              blocked_apps: blockedApps
+            })
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.message || 'Creation failed');
+          showToast(`Added ${numbersList.length} numbers`, 'success');
+        }
+
+        closeNumberModal();
+        await loadNumbersData();
+        await loadStats();
+      } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.classList.remove('hidden');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    async function deleteNumber(id) {
+      if (!confirm('Are you sure you want to delete this number?')) return;
+      try {
+        const res = await fetch(`/api/admin/numbers/${id}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+        if (!res.ok) throw new Error('Failed to delete');
+        showToast('Number deleted', 'success');
+        await loadNumbersData();
+        await loadStats();
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    async function confirmClearAllNumbers() {
+      if (!confirm('DANGER: This will delete ALL numbers from the backend. Continue?')) return;
+      try {
+        const res = await fetch('/api/admin/numbers/clear', {
+          method: 'POST',
+          headers: getAuthHeaders()
+        });
+        if (!res.ok) throw new Error('Failed to clear');
+        showToast('All numbers deleted', 'success');
+        await loadNumbersData();
+        await loadStats();
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    // --- REAL-TIME SSE STREAM ---
+    function initSSE() {
+      if (sseSource) sseSource.close();
+      sseSource = new EventSource('/api/otps/stream');
+
+      sseSource.onopen = () => {
+        document.getElementById('liveStreamBadge').classList.remove('hidden');
+        document.getElementById('liveStreamBadge').classList.add('flex');
+      };
+
+      sseSource.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          handleLiveOtpMessage(payload);
+        } catch (err) {}
+      };
+
+      sseSource.addEventListener('notification', (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          showToast(`Push Alert: ${payload.title} - ${payload.body}`, 'info');
+        } catch (err) {}
+      });
+
+      sseSource.onerror = () => {
+        document.getElementById('liveStreamBadge').classList.add('hidden');
+        document.getElementById('liveStreamBadge').classList.remove('flex');
+      };
+    }
+
+    function handleLiveOtpMessage(otp) {
+      const feed = document.getElementById('liveOtpFeed');
+      // If placeholder exists, remove it
+      if (feed.firstElementChild && feed.firstElementChild.textContent.includes('Waiting for live')) {
+        feed.innerHTML = '';
+      }
+
+      const card = document.createElement('div');
+      card.className = 'bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm transition hover:border-slate-700';
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-sm uppercase">
+              ${(otp.app_id || 'sms').substring(0, 2)}
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="font-bold text-white">${otp.sender || 'Service'}</span>
+                <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">${otp.app_id || 'other'}</span>
+                <span class="text-xs text-slate-500">${otp.country || ''}</span>
+              </div>
+              <div class="text-xs text-slate-400 font-mono mt-0.5">${otp.number || ''}</div>
+            </div>
+          </div>
+          <div class="text-right">
+            ${otp.clean_otp || otp.otp ? `
+              <div class="inline-flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono font-bold text-lg px-3 py-1 rounded-xl">
+                <span>${otp.clean_otp || otp.otp}</span>
+                <button onclick="navigator.clipboard.writeText('${otp.clean_otp || otp.otp}'); showToast('OTP copied!', 'success');" class="text-xs hover:text-white ml-1">📋</button>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+        <p class="text-sm text-slate-300 mt-3 bg-dark-950/60 p-3 rounded-xl border border-slate-800/80 font-mono break-all">${otp.message || ''}</p>
+        <div class="text-[11px] text-slate-500 mt-2 flex justify-between">
+          <span>Panel: ${otp.panel || 'Scraper'}</span>
+          <span>${otp.timestamp || new Date().toLocaleTimeString()}</span>
+        </div>
+      `;
+
+      feed.insertBefore(card, feed.firstChild);
+      loadStats();
+    }
+
+    function clearLiveFeed() {
+      document.getElementById('liveOtpFeed').innerHTML = `
+        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500">
+          Feed cleared. Waiting for incoming live OTPs...
+        </div>
+      `;
+    }
+
+    // --- PUSH NOTIFICATIONS ---
+    document.getElementById('notifyForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const targetNumber = document.getElementById('notifyTargetNumber').value.trim();
+      const appId = document.getElementById('notifyAppId').value;
+      const title = document.getElementById('notifyTitle').value.trim();
+      const body = document.getElementById('notifyBody').value.trim();
+      const btn = document.getElementById('sendNotifyBtn');
+      const statusDiv = document.getElementById('notifyStatus');
+
+      btn.disabled = true;
+      btn.textContent = 'Sending Push Alert...';
+      statusDiv.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/admin/notifications/send', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            number: targetNumber,
+            app_id: appId,
+            title,
+            body
+          })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || 'Send failed');
+
+        statusDiv.className = 'text-xs rounded-xl p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400';
+        statusDiv.textContent = `Notification successfully broadcasted to ${targetNumber || 'all users'}!`;
+        statusDiv.classList.remove('hidden');
+        showToast('Push alert broadcasted', 'success');
+      } catch (err) {
+        statusDiv.className = 'text-xs rounded-xl p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400';
+        statusDiv.textContent = err.message;
+        statusDiv.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send Real-Time Notification Now';
+      }
+    });
+
+    // --- TOAST HELPER ---
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const el = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600 text-white shadow-emerald-900/50',
+        error: 'bg-rose-600 text-white shadow-rose-900/50',
+        info: 'bg-indigo-600 text-white shadow-indigo-900/50'
+      };
+      el.className = `${colors[type] || colors.info} px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold flex items-center space-x-2 transition-all transform duration-300`;
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      }, 3500);
+    }
+
+    // Startup check
+    window.addEventListener('DOMContentLoaded', checkAuthOnLoad);
+  </script>
+</body>
+</html>
