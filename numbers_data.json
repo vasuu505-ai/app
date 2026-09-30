@@ -1,0 +1,40 @@
+[
+  {
+    "id": "num_101",
+    "number": "79775594420",
+    "countryCode": "+7",
+    "country": "Russia",
+    "flag": "🇷🇺",
+    "status": "active",
+    "supported_apps": [
+      "whatsapp",
+      "telegram",
+      "google",
+      "uber",
+      "discord",
+      "facebook"
+    ],
+    "blocked_apps": [
+      "paypal"
+    ],
+    "received_sms_count": 0
+  },
+  {
+    "id": "num_102",
+    "number": "919876543210",
+    "countryCode": "+91",
+    "country": "India",
+    "flag": "🇮🇳",
+    "status": "active",
+    "supported_apps": [
+      "whatsapp",
+      "telegram",
+      "google",
+      "uber",
+      "facebook",
+      "amazon"
+    ],
+    "blocked_apps": [],
+    "received_sms_count": 0
+  }
+]

@@ -1,0 +1,8 @@
+flask==3.0.3
+flask-cors==4.0.1
+gunicorn==22.0.0
+requests==2.32.3
+beautifulsoup4==4.12.3
+pycountry==23.12.11
+phonenumbers==8.13.40
+lxml==5.2.2
