@@ -389,10 +389,27 @@
           </div>
         </div>
 
-        <div id="addNumbersFieldGroup">
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Phone Number(s)</label>
-          <textarea id="modalNumbersText" rows="3" placeholder="Enter one or multiple numbers (one per line or comma-separated)"
-            class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+        <div id="addNumbersFieldGroup" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Phone Number(s)</label>
+            <span id="txtFileBadge" class="hidden text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium"></span>
+          </div>
+
+          <!-- .txt File Upload Dropzone -->
+          <div class="border border-dashed border-slate-700 hover:border-indigo-500 bg-dark-950/60 hover:bg-dark-950 rounded-xl p-3 text-center transition cursor-pointer"
+               onclick="document.getElementById('txtFileInput').click()">
+            <input type="file" id="txtFileInput" accept=".txt,text/plain" onchange="handleTxtFileUpload(event)" class="hidden">
+            <div class="flex items-center justify-center space-x-2 text-indigo-400 font-medium text-xs">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <span>Upload .txt File (Auto-import numbers)</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Select a .txt file with phone numbers (1 per line or comma separated)</p>
+          </div>
+
+          <textarea id="modalNumbersText" rows="4" placeholder="Or type/paste numbers here (one per line or comma-separated)"
+            class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"></textarea>
         </div>
 
         <div id="editNumberFieldGroup" class="hidden">
@@ -672,6 +689,38 @@
       }).join('');
     }
 
+    // --- TXT FILE UPLOAD HANDLER ---
+    function handleTxtFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const content = e.target.result || '';
+        const parsed = content.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean);
+        if (parsed.length === 0) {
+          showToast('No numbers found in .txt file', 'error');
+          return;
+        }
+
+        const textarea = document.getElementById('modalNumbersText');
+        const existing = textarea.value.trim();
+        if (existing) {
+          textarea.value = existing + '\n' + parsed.join('\n');
+        } else {
+          textarea.value = parsed.join('\n');
+        }
+
+        const badge = document.getElementById('txtFileBadge');
+        badge.textContent = `✓ ${parsed.length} numbers loaded from ${file.name}`;
+        badge.classList.remove('hidden');
+
+        showToast(`Imported ${parsed.length} numbers from ${file.name}`, 'success');
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
     // --- MODAL: ADD / EDIT ---
     function openAddModal() {
       document.getElementById('modalTitle').textContent = 'Add New Number(s)';
@@ -682,6 +731,10 @@
       document.getElementById('modalStatus').value = 'active';
       document.getElementById('modalNumbersText').value = '';
       document.getElementById('modalBlockedApps').value = '';
+      
+      const badge = document.getElementById('txtFileBadge');
+      badge.textContent = '';
+      badge.classList.add('hidden');
       
       document.getElementById('addNumbersFieldGroup').classList.remove('hidden');
       document.getElementById('editNumberFieldGroup').classList.add('hidden');
