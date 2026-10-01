@@ -3,6 +3,7 @@
 import unittest
 import json
 import time
+import io
 from main import app, ADMIN_PASSWORD
 from shared_storage import shared_storage
 
@@ -176,6 +177,36 @@ class FreeNumberApiTests(unittest.TestCase):
         res_send = self.app.post('/api/admin/notifications/send', headers=headers, json=notify_payload)
         self.assertEqual(res_send.status_code, 200)
         self.assertTrue(res_send.get_json().get('success'))
+
+    def test_admin_txt_file_upload(self):
+        headers = {'X-Admin-Key': ADMIN_PASSWORD}
+        # Mock .txt file with 3 phone numbers
+        txt_content = b"14155552671\n14155552672\n14155552673\n"
+        data = {
+            'file': (io.BytesIO(txt_content), 'sample_numbers.txt'),
+            'country': 'United States',
+            'countryCode': '+1',
+            'flag': '🇺🇸',
+            'status': 'active',
+            'supported_apps': '["whatsapp", "uber"]',
+            'blocked_apps': '["paypal"]'
+        }
+        res = self.app.post('/api/admin/numbers/upload', headers=headers, data=data, content_type='multipart/form-data')
+        self.assertEqual(res.status_code, 200)
+        res_json = res.get_json()
+        self.assertTrue(res_json.get('success'))
+        self.assertIn('Added 3 numbers', res_json.get('message'))
+
+        # Check that the numbers exist
+        res_check = self.app.get('/api/numbers?search=14155552671')
+        self.assertEqual(res_check.status_code, 200)
+        numbers = res_check.get_json().get('numbers', [])
+        self.assertEqual(len(numbers), 1)
+        self.assertEqual(numbers[0]['country'], 'United States')
+        self.assertIn('whatsapp', numbers[0]['supported_apps'])
+
+        # Clean up added test numbers
+        self.app.delete(f'/api/admin/numbers/{numbers[0]["id"]}', headers=headers)
 
 if __name__ == '__main__':
     unittest.main()
