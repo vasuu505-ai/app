@@ -609,13 +609,17 @@ def send_custom_notification():
     })
 
 # ===== STARTUP =====
-def _startup():
-    load_numbers()
+# Load numbers synchronously (instant JSON read — no network)
+load_numbers()
+
+def _start_scrapers():
+    """Delayed scraper start — gives Flask time to be ready for health checks"""
+    time.sleep(2)
     load_panel_scrapers()
 
-threading.Thread(target=_startup, daemon=True).start()
+threading.Thread(target=_start_scrapers, daemon=True).start()
 
 if __name__ == '__main__':
     logger.info(f"🚀 Starting FreeNumber API server on port {PORT}...")
-    time.sleep(1)
     app.run(host='0.0.0.0', port=PORT, debug=False)
+
