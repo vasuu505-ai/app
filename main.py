@@ -11,7 +11,7 @@ Production-ready API & Management Backend for Koyeb:
 - Push Notifications (FCM / SSE): POST /api/notifications/subscribe
 
 Koyeb Environment Variables:
-  ADMIN_PASSWORD   — Admin passcode (default: YEAR2030#)
+  ADMIN_PASSWORD   — Admin passcode (configured in .env or Koyeb)
   FCM_SERVER_KEY   — Firebase Server Key (optional for phone push notifications)
   PORT             — Koyeb port (default: 8080)
 """
@@ -28,6 +28,12 @@ import glob
 import re
 import queue
 import importlib.util
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from shared_storage import shared_storage, KNOWN_APPS, clean_phone_number, normalize_country
 
 logging.basicConfig(
@@ -37,7 +43,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===== CONFIG =====
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "YEAR2030#")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+if not ADMIN_PASSWORD:
+    logger.warning("⚠️ ADMIN_PASSWORD is not set in environment! Set it in Koyeb or .env")
+
 PORT           = int(os.getenv("PORT", 8080))
 NUMBERS_FILE   = "numbers_data.json"
 
@@ -131,6 +140,8 @@ def load_panel_scrapers():
 # ===== ADMIN AUTH SECURITY =====
 def check_admin():
     """Verify admin passcode from Header, Bearer token, query param, or JSON body"""
+    if not ADMIN_PASSWORD:
+        return False
     # 1. Header: X-Admin-Key
     header_key = request.headers.get('X-Admin-Key')
     if header_key and header_key == ADMIN_PASSWORD:
@@ -408,21 +419,55 @@ def verify_admin():
     return jsonify({'success': False, 'message': 'Invalid admin password'}), 401
 
 @app.route('/api/admin/numbers', methods=['POST'])
+@app.route('/api/admin/numbers/upload', methods=['POST'])
 def add_numbers():
     if not check_admin():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    body         = request.get_json(silent=True) or {}
-    country      = body.get('country')
-    country_code = body.get('countryCode')
-    flag         = body.get('flag')
-    nums         = body.get('numbers', [])
-    status       = body.get('status', 'active')
-    supported    = body.get('supported_apps') or list(DEFAULT_SUPPORTED_APPS)
-    blocked      = body.get('blocked_apps') or []
+    nums = []
+    # Check if multipart/form-data with file upload (.txt)
+    if request.files and 'file' in request.files:
+        file = request.files['file']
+        try:
+            content = file.read().decode('utf-8', errors='ignore')
+            nums = [line.strip() for line in re.split(r'[\r\n,]+', content) if line.strip()]
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'Failed to parse file: {e}'}), 400
+
+        country      = request.form.get('country')
+        country_code = request.form.get('countryCode')
+        flag         = request.form.get('flag')
+        status       = request.form.get('status', 'active')
+        supported_str= request.form.get('supported_apps')
+        blocked_str  = request.form.get('blocked_apps')
+
+        if supported_str:
+            try:
+                supported = json.loads(supported_str) if supported_str.startswith('[') else [s.strip() for s in supported_str.split(',') if s.strip()]
+            except Exception:
+                supported = [s.strip() for s in supported_str.split(',') if s.strip()]
+        else:
+            supported = list(DEFAULT_SUPPORTED_APPS)
+
+        if blocked_str:
+            try:
+                blocked = json.loads(blocked_str) if blocked_str.startswith('[') else [s.strip() for s in blocked_str.split(',') if s.strip()]
+            except Exception:
+                blocked = [s.strip() for s in blocked_str.split(',') if s.strip()]
+        else:
+            blocked = []
+    else:
+        body         = request.get_json(silent=True) or {}
+        country      = body.get('country')
+        country_code = body.get('countryCode')
+        flag         = body.get('flag')
+        nums         = body.get('numbers', [])
+        status       = body.get('status', 'active')
+        supported    = body.get('supported_apps') or list(DEFAULT_SUPPORTED_APPS)
+        blocked      = body.get('blocked_apps') or []
 
     if not all([country, country_code, flag, nums]):
-        return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        return jsonify({'success': False, 'message': 'Missing required fields (country, countryCode, flag, numbers or file)'}), 400
 
     if country_code and not country_code.startswith('+') and country_code.isdigit():
         country_code = '+' + country_code
