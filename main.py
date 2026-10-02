@@ -1,19 +1,19 @@
-# main.py — FreeNumber API & Admin Server for Koyeb
+# main.py — FreeNumber Numbers & Push Notification Server
 """
-Production-ready API & Management Backend for Koyeb:
+Production-ready API & Management Backend:
 - Secure Admin Passcode Authentication
 - Embedded Web Admin Dashboard at /admin
-- Specific Number Messages: GET /api/numbers/{number}/messages
-- Numbers with Supported Apps: GET /api/numbers
-- Services & Apps Matrix: GET /api/apps
-- Clean OTP Fields: GET /api/otps
-- Real-Time SSE Stream: GET /api/otps/stream
-- Push Notifications (FCM / SSE): POST /api/notifications/subscribe
+- Numbers Management (Single & Bulk Add, Edit, Delete, Filter)
+- Supported Apps Matrix: GET /api/apps
+- Real-Time Push Notifications (FCM / SSE):
+    - Subscribe: POST /api/notifications/subscribe
+    - Admin Broadcast: POST /api/admin/notifications/send
+    - Real-Time SSE Stream: GET /api/notifications/stream
 
-Koyeb Environment Variables:
+Environment Variables:
   ADMIN_PASSWORD   — Admin passcode (default: YEAR2030#)
   FCM_SERVER_KEY   — Firebase Server Key (optional for phone push notifications)
-  PORT             — Koyeb port (default: 8080)
+  PORT             — Server port (default: 8080)
 """
 
 from flask import Flask, jsonify, request, Response, render_template, stream_with_context
@@ -24,10 +24,7 @@ import logging
 import json
 import time
 import hashlib
-import glob
-import re
 import queue
-import importlib.util
 from shared_storage import shared_storage, KNOWN_APPS, clean_phone_number, normalize_country
 
 logging.basicConfig(
@@ -44,7 +41,7 @@ NUMBERS_FILE   = "numbers_data.json"
 # ===== FLASK APP =====
 app = Flask(__name__, template_folder="templates")
 
-# CORS — mobile apps & external frontends can call from any domain
+# CORS — mobile apps & external frontends can call from any origin
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
 # ===== NUMBERS STORAGE & MIGRATION =====
@@ -82,12 +79,12 @@ def load_numbers():
                 with open(NUMBERS_FILE, 'r', encoding='utf-8') as f:
                     raw_list = json.load(f)
                 numbers_data = [normalize_number_entry(n) for n in raw_list]
-                logger.info(f"✅ Loaded {len(numbers_data)} numbers from {NUMBERS_FILE}")
+                logger.info(f"Loaded {len(numbers_data)} numbers from {NUMBERS_FILE}")
             else:
                 numbers_data = []
-                logger.warning(f"⚠️ {NUMBERS_FILE} not found — empty list")
+                logger.warning(f"{NUMBERS_FILE} not found — initialized empty list")
         except Exception as e:
-            logger.error(f"❌ Load error: {e}")
+            logger.error(f"Load error: {e}")
             numbers_data = []
 
 def save_numbers():
@@ -96,37 +93,7 @@ def save_numbers():
             with open(NUMBERS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(numbers_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.error(f"❌ Save error: {e}")
-
-# ===== PANEL LOADER =====
-def load_panel_scrapers():
-    panel_files = sorted(glob.glob('panel*_scraper.py'))
-    if os.path.exists('scrape.py'):
-        panel_files.append('scrape.py')
-
-    if not panel_files:
-        logger.warning("⚠️ No scrapers found")
-        return
-
-    logger.info(f"📡 Loading {len(panel_files)} scraper(s): {panel_files}")
-
-    for pf in panel_files:
-        try:
-            name = pf.replace('.py', '')
-            spec = importlib.util.spec_from_file_location(name, pf)
-            mod  = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-
-            if not hasattr(mod, 'start_scraper'):
-                logger.warning(f"⚠️ {pf}: no start_scraper()")
-                continue
-
-            t = threading.Thread(target=mod.start_scraper, daemon=True, name=f"{name}_thread")
-            t.start()
-            logger.info(f"✅ Started: {name}")
-
-        except Exception as e:
-            logger.error(f"❌ Failed to load {pf}: {e}")
+            logger.error(f"Save error: {e}")
 
 # ===== ADMIN AUTH SECURITY =====
 def check_admin():
@@ -161,15 +128,17 @@ def check_admin():
 def root():
     return jsonify({
         "status": "running",
-        "service": "FreeNumber Dynamic API",
+        "service": "FreeNumber API",
         "admin_ui": "/admin",
         "endpoints": {
             "numbers": "/api/numbers",
-            "specific_number_messages": "/api/numbers/{number}/messages",
+            "numbers_stats": "/api/numbers/stats",
             "apps": "/api/apps",
-            "otps": "/api/otps",
-            "otps_stream": "/api/otps/stream",
             "notifications_subscribe": "/api/notifications/subscribe",
+            "notifications_stream": "/api/notifications/stream",
+            "admin_verify": "/api/admin/verify",
+            "admin_numbers": "/api/admin/numbers",
+            "admin_notifications_send": "/api/admin/notifications/send",
             "health": "/health"
         }
     })
@@ -179,13 +148,13 @@ def health():
     return jsonify({
         "status": "ok",
         "numbers": len(numbers_data),
-        "otps": shared_storage.count(),
+        "push_subscribers": shared_storage.get_subscriber_count(),
         "sse_subscribers": len(shared_storage.sse_subscribers)
     })
 
 @app.route('/admin')
 def admin_page():
-    """Web Admin Dashboard for managing numbers, viewing live stream & sending notifications"""
+    """Web Admin Dashboard for numbers management & push notifications"""
     return render_template('admin.html')
 
 # ===== PUBLIC APIS =====
@@ -193,7 +162,7 @@ def admin_page():
 @app.route('/api/numbers')
 def get_numbers():
     """
-    Returns list of numbers with supported_apps, blocked_apps, country, flag, status, and received_sms_count.
+    Returns list of numbers with supported_apps, blocked_apps, country, flag, and status.
     Filters: ?country=..., ?search=..., ?app=...
     """
     country = request.args.get('country', 'all')
@@ -203,13 +172,7 @@ def get_numbers():
     with numbers_lock:
         data = list(numbers_data)
 
-    # Compute dynamic received_sms_count
-    enriched = []
-    for n in data:
-        item = dict(n)
-        live_count = shared_storage.count_for_number(item.get('number', ''))
-        item['received_sms_count'] = max(item.get('received_sms_count', 0), live_count)
-        enriched.append(item)
+    enriched = [dict(n) for n in data]
 
     if country != 'all':
         enriched = [n for n in enriched if n['countryCode'] == country or n['country'].lower() == country.lower()]
@@ -226,77 +189,6 @@ def get_numbers():
         'numbers': enriched,
         'total': len(enriched)
     })
-
-@app.route('/api/numbers/<path:number>/messages')
-def get_number_messages(number):
-    """
-    Endpoint 1: Specific Number Messages
-    Returns messages with clean_otp, sender, app_id, message, timestamp.
-    """
-    clean_target = clean_phone_number(number)
-    messages = shared_storage.get_for_number(clean_target)
-
-    # Resolve country & formatted number
-    country_name = "Unknown"
-    with numbers_lock:
-        for n in numbers_data:
-            c_num = clean_phone_number(n.get('number', ''))
-            if c_num == clean_target or c_num.endswith(clean_target) or clean_target.endswith(c_num):
-                country_name = n.get('country', country_name)
-                break
-
-    if country_name == "Unknown" and messages:
-        country_name = messages[0].get('country', 'Unknown')
-
-    formatted_messages = []
-    for m in messages:
-        formatted_messages.append({
-            "id": m.get("id"),
-            "sender": m.get("sender", "SMS"),
-            "app_id": m.get("app_id", "other"),
-            "otp": m.get("clean_otp") or m.get("otp", ""),
-            "clean_otp": m.get("clean_otp") or m.get("otp", ""),
-            "message": m.get("message", ""),
-            "timestamp": m.get("timestamp", "")
-        })
-
-    return jsonify({
-        "number": number,
-        "country": country_name,
-        "total_messages": len(formatted_messages),
-        "messages": formatted_messages
-    })
-
-@app.route('/api/apps')
-def get_apps():
-    """
-    Endpoint 3: All Apps & Service Status
-    Dynamic popular apps matrix with available countries count and status.
-    """
-    with numbers_lock:
-        active_numbers = [n for n in numbers_data if n.get('status', 'active') == 'active']
-
-    apps_list = []
-    for app_info in KNOWN_APPS:
-        aid = app_info["id"]
-        # Find distinct countries supporting this app
-        matching_countries = set()
-        for n in active_numbers:
-            sup = [s.lower() for s in n.get('supported_apps', [])]
-            blk = [b.lower() for b in n.get('blocked_apps', [])]
-            if aid in sup and aid not in blk:
-                matching_countries.add(n.get('country', 'Unknown'))
-
-        count = len(matching_countries)
-        apps_list.append({
-            "id": aid,
-            "name": app_info["name"],
-            "icon_slug": app_info["icon_slug"],
-            "available_countries_count": count,
-            "status": "available" if count > 0 else "unavailable"
-        })
-
-    return jsonify(apps_list)
 
 @app.route('/api/numbers/stats')
 def get_numbers_stats():
@@ -317,37 +209,56 @@ def get_numbers_stats():
         'countries': countries
     })
 
+@app.route('/api/apps')
+def get_apps():
+    """
+    Catalog of supported apps and services with active count.
+    """
+    with numbers_lock:
+        active_numbers = [n for n in numbers_data if n.get('status', 'active') == 'active']
+
+    apps_list = []
+    for app_info in KNOWN_APPS:
+        aid = app_info["id"]
+        matching_countries = set()
+        for n in active_numbers:
+            sup = [s.lower() for s in n.get('supported_apps', [])]
+            blk = [b.lower() for b in n.get('blocked_apps', [])]
+            if aid in sup and aid not in blk:
+                matching_countries.add(n.get('country', 'Unknown'))
+
+        count = len(matching_countries)
+        apps_list.append({
+            "id": aid,
+            "name": app_info["name"],
+            "icon_slug": app_info["icon_slug"],
+            "available_countries_count": count,
+            "status": "available" if count > 0 else "unavailable"
+        })
+
+    return jsonify(apps_list)
+
+# Compatibility stub for client apps that query messages or otps
+@app.route('/api/numbers/<path:number>/messages')
+def get_number_messages(number):
+    return jsonify({
+        "number": number,
+        "country": "Unknown",
+        "total_messages": 0,
+        "messages": []
+    })
+
 @app.route('/api/otps')
 def get_otps():
-    """
-    Endpoint 4: Live OTPs with clean_otp, app_id, sender, country
-    """
-    limit   = request.args.get('limit', 500, type=int)
-    country = request.args.get('country', 'all')
-    app_id  = request.args.get('app', '').lower()
-    search  = request.args.get('search', '').lower()
-    data    = shared_storage.get_all()
-
-    if country != 'all':
-        data = [o for o in data if o.get('country', '').lower() == country.lower()]
-    if app_id:
-        data = [o for o in data if o.get('app_id', '').lower() == app_id]
-    if search:
-        data = [o for o in data
-                if search in (o.get('number') or '').lower()
-                or search in (o.get('sender') or '').lower()
-                or search in (o.get('clean_otp') or '').lower()
-                or search in (o.get('message') or '').lower()]
-
-    return jsonify({'success': True, 'otps': data[:limit], 'total': len(data)})
+    return jsonify({'success': True, 'otps': [], 'total': 0})
 
 # ===== REAL-TIME SSE STREAM & PUSH NOTIFICATIONS =====
 
+@app.route('/api/notifications/stream')
 @app.route('/api/otps/stream')
-def stream_otps():
+def stream_notifications():
     """
-    Endpoint 5 (Option A): Server-Sent Events (SSE) Live Stream
-    Sends real-time updates as soon as an OTP is received.
+    Server-Sent Events (SSE) Live Stream for push alerts.
     Supports filtering by specific number: ?number=...
     """
     filter_number = request.args.get('number')
@@ -355,7 +266,6 @@ def stream_otps():
 
     def event_stream():
         try:
-            # Yield initial connection confirmation
             yield f": connected\n\n"
             while True:
                 try:
@@ -367,7 +277,6 @@ def stream_otps():
                     else:
                         yield f"event: {event_type}\ndata: {data_str}\n\n"
                 except queue.Empty:
-                    # Keep-alive comment for Koyeb/reverse proxy
                     yield f": ping\n\n"
         except GeneratorExit:
             pass
@@ -383,7 +292,7 @@ def stream_otps():
 @app.route('/api/notifications/subscribe', methods=['POST'])
 def subscribe_notifications():
     """
-    Endpoint 5 (Option B): Subscribe Firebase Cloud Messaging (FCM) token
+    Subscribe Firebase Cloud Messaging (FCM) token
     Request: {"fcm_token": "...", "number": "..."}
     """
     body = request.get_json(silent=True) or {}
@@ -529,16 +438,9 @@ def delete_country_numbers(country_code):
     save_numbers()
     return jsonify({'success': True, 'deleted': deleted, 'total': len(numbers_data)})
 
-@app.route('/api/admin/otps/clear', methods=['POST'])
-def clear_otps():
-    if not check_admin():
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
-    shared_storage.clear()
-    return jsonify({'success': True, 'message': 'OTPs cleared'})
-
 @app.route('/api/admin/notifications/send', methods=['POST'])
 def send_custom_notification():
-    """Admin endpoint to broadcast manual push notification to users' phones"""
+    """Admin endpoint to broadcast push notification to users' devices"""
     if not check_admin():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
@@ -566,11 +468,10 @@ def send_custom_notification():
 # ===== STARTUP =====
 def _startup():
     load_numbers()
-    load_panel_scrapers()
 
 threading.Thread(target=_startup, daemon=True).start()
 
 if __name__ == '__main__':
-    logger.info(f"🚀 Starting FreeNumber API server on port {PORT}...")
+    logger.info(f"Starting FreeNumber API server on port {PORT}...")
     time.sleep(1)
     app.run(host='0.0.0.0', port=PORT, debug=False)

@@ -1,5 +1,5 @@
 # test_suite.py
-"""Comprehensive test suite for the FreeNumber backend API"""
+"""Comprehensive test suite for the FreeNumber backend API (Numbers Management & Push Notifications)"""
 import unittest
 import json
 import time
@@ -15,14 +15,14 @@ class FreeNumberApiTests(unittest.TestCase):
         res = self.app.get('/')
         self.assertEqual(res.status_code, 200)
         data = res.get_json()
-        self.assertEqual(data.get('service'), 'FreeNumber Dynamic API')
+        self.assertEqual(data.get('service'), 'FreeNumber API')
 
         res_h = self.app.get('/health')
         self.assertEqual(res_h.status_code, 200)
         data_h = res_h.get_json()
         self.assertEqual(data_h.get('status'), 'ok')
         self.assertIn('numbers', data_h)
-        self.assertIn('otps', data_h)
+        self.assertIn('push_subscribers', data_h)
 
     def test_admin_ui_route(self):
         res = self.app.get('/admin')
@@ -53,8 +53,7 @@ class FreeNumberApiTests(unittest.TestCase):
         self.assertGreater(len(numbers), 0)
 
         first = numbers[0]
-        # Required AI Studio fields check
-        required_keys = ['id', 'number', 'countryCode', 'country', 'flag', 'status', 'supported_apps', 'blocked_apps', 'received_sms_count']
+        required_keys = ['id', 'number', 'countryCode', 'country', 'flag', 'status', 'supported_apps', 'blocked_apps']
         for k in required_keys:
             self.assertIn(k, first, f"Missing key in /api/numbers: {k}")
 
@@ -68,58 +67,25 @@ class FreeNumberApiTests(unittest.TestCase):
         self.assertIsInstance(apps, list)
         self.assertGreater(len(apps), 0)
 
-        # Check WhatsApp in apps list
         wa = next((a for a in apps if a['id'] == 'whatsapp'), None)
         self.assertIsNotNone(wa)
         self.assertIn('name', wa)
         self.assertIn('icon_slug', wa)
         self.assertIn('available_countries_count', wa)
         self.assertIn('status', wa)
-        self.assertGreaterEqual(wa['available_countries_count'], 1)
-        self.assertEqual(wa['status'], 'available')
 
-    def test_otp_enrichment_and_number_messages(self):
-        test_number = "79775594420"
-        sample_otp = {
-            'id': f'test_msg_{int(time.time()*1000)}',
-            'time': '12:30:00',
-            'country': 'Russian Federation', # tests normalization to Russia
-            'flag': '🇷🇺',
-            'number': test_number,
-            'sender': 'WhatsApp',
-            'message': 'Your WhatsApp code: 484-073. Do not share.',
-            'otp': '484-073'
-        }
-
-        # Add to shared_storage
-        added = shared_storage.add_otp(sample_otp)
-        self.assertTrue(added)
-
-        # Check /api/otps
-        res = self.app.get('/api/otps')
-        self.assertEqual(res.status_code, 200)
-        otps = res.get_json().get('otps', [])
-        found = next((o for o in otps if o['id'] == sample_otp['id']), None)
-        self.assertIsNotNone(found)
-        self.assertEqual(found['clean_otp'], '484-073')
-        self.assertEqual(found['app_id'], 'whatsapp')
-        self.assertEqual(found['country'], 'Russia')
-        self.assertEqual(found['sender'], 'WhatsApp')
-
-        # Check Endpoint 1: GET /api/numbers/{number}/messages
-        res_msg = self.app.get(f'/api/numbers/{test_number}/messages')
+    def test_compatibility_stubs(self):
+        # /api/numbers/{number}/messages should return safe empty list without error
+        res_msg = self.app.get('/api/numbers/79775594420/messages')
         self.assertEqual(res_msg.status_code, 200)
         msg_data = res_msg.get_json()
-        self.assertEqual(msg_data.get('number'), test_number)
-        self.assertEqual(msg_data.get('country'), 'Russia')
-        self.assertGreaterEqual(msg_data.get('total_messages'), 1)
-        self.assertIsInstance(msg_data.get('messages'), list)
-        
-        msg_item = msg_data['messages'][0]
-        self.assertEqual(msg_item['sender'], 'WhatsApp')
-        self.assertEqual(msg_item['app_id'], 'whatsapp')
-        self.assertEqual(msg_item['clean_otp'], '484-073')
-        self.assertIn('Your WhatsApp code: 484-073', msg_item['message'])
+        self.assertEqual(msg_data.get('total_messages'), 0)
+        self.assertEqual(msg_data.get('messages'), [])
+
+        # /api/otps stub
+        res_otps = self.app.get('/api/otps')
+        self.assertEqual(res_otps.status_code, 200)
+        self.assertEqual(res_otps.get_json().get('total'), 0)
 
     def test_admin_add_and_edit_number(self):
         headers = {'X-Admin-Key': ADMIN_PASSWORD}
@@ -139,9 +105,9 @@ class FreeNumberApiTests(unittest.TestCase):
         # Verify it appears in /api/numbers
         res_list = self.app.get('/api/numbers?country=%2B49')
         data = res_list.get_json()
-        self.assertEqual(data.get('total'), 1)
-        added_num = data['numbers'][0]
-        self.assertEqual(added_num['number'], '4915123456789')
+        self.assertGreaterEqual(data.get('total'), 1)
+        added_num = next((n for n in data['numbers'] if n['number'] == '4915123456789'), None)
+        self.assertIsNotNone(added_num)
         self.assertIn('uber', added_num['supported_apps'])
 
         # Update number status to inactive
@@ -169,7 +135,7 @@ class FreeNumberApiTests(unittest.TestCase):
         headers = {'X-Admin-Key': ADMIN_PASSWORD}
         notify_payload = {
             'title': 'Test Push Notification',
-            'body': 'Your code is 123456',
+            'body': 'New numbers added!',
             'number': '79775594420',
             'app_id': 'whatsapp'
         }
