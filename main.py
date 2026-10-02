@@ -150,7 +150,11 @@ def health():
         "numbers": len(numbers_data),
         "push_subscribers": shared_storage.get_subscriber_count(),
         "sse_subscribers": len(shared_storage.sse_subscribers)
-    })
+    }), 200
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 
 @app.route('/admin')
 def admin_page():
@@ -266,10 +270,14 @@ def stream_notifications():
 
     def event_stream():
         try:
-            yield f": connected\n\n"
-            while True:
+            yield ": connected\n\n"
+            loops = 0
+            # Keep stream open for up to 60 * 5s = 300 seconds (5 minutes)
+            # Reconnecting seamlessly guarantees zero dead/zombie threads
+            while loops < 60:
+                loops += 1
                 try:
-                    event_dict = q.get(timeout=20)
+                    event_dict = q.get(timeout=5)
                     event_type = event_dict.get("event", "message")
                     data_str = json.dumps(event_dict.get("data", {}))
                     if event_type == "message":
@@ -277,14 +285,14 @@ def stream_notifications():
                     else:
                         yield f"event: {event_type}\ndata: {data_str}\n\n"
                 except queue.Empty:
-                    yield f": ping\n\n"
-        except GeneratorExit:
+                    yield ": ping\n\n"
+        except (GeneratorExit, Exception):
             pass
         finally:
             shared_storage.unsubscribe_sse(q)
 
     response = Response(stream_with_context(event_stream()), mimetype="text/event-stream")
-    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Cache-Control'] = 'no-cache, no-transform'
     response.headers['X-Accel-Buffering'] = 'no'
     response.headers['Connection'] = 'keep-alive'
     return response
